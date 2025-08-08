@@ -1,18 +1,18 @@
 import fetch from 'node-fetch';
 import * as fs from "fs";
-import {ColorResolvable, DiscordAPIError, MessageEmbed, WebhookClient} from "discord.js";
-import {time} from "@discordjs/builders";
+import { ColorResolvable, DiscordAPIError, EmbedBuilder, WebhookClient } from "discord.js";
+import { time } from "@discordjs/builders";
 import * as config from "./config.json";
-const _ = require("lodash");
+import _ from "lodash";
 
 const apiUrl = "https://discordstatus.com/api/v2/incidents.json";
 const cacheFileName = "./messages.json";
 
-const ignoreDays = config["ignoreDays"]??30;
+const ignoreDays = config["ignoreDays"] ?? 30;
 const ignoreTime = ignoreDays * 86400000;
 console.log(`Ignoring incidents from ${ignoreDays} days ago (${ignoreTime} ms).`);
 
-const webhookClient = new WebhookClient({url: config.url});
+const webhookClient = new WebhookClient({ url: config.url });
 
 /**
  * Checks if a message exists for the given incident. If so, the message will be updated, if there are new updates to
@@ -71,15 +71,15 @@ async function checkIncident(incident: any) {
 /**
  * Creates a new EmbedMessage containing the information about the given incident.
  * @param incident
- * @return {MessageEmbed} - the newly constructed EmbedMessage
+ * @return {EmbedBuilder} - the newly constructed EmbedMessage
  */
-function buildIncidentEmbed(incident: any) : MessageEmbed {
-    const embed = new MessageEmbed()
+function buildIncidentEmbed(incident: any): EmbedBuilder {
+    const embed = new EmbedBuilder()
         .setTitle(incident.name)
         .setURL(incident.shortlink)
         .setColor(getStatusColor(incident.status))
-        .setFooter(incident.id)
-        .setTimestamp(incident.updated_at);
+        .setFooter({ text: incident.id, iconURL: 'https://i.imgur.com/AfFp7pu.png' })
+        .setTimestamp(new Date(incident.updated_at));
 
     // collect affected components
     let components = [];
@@ -88,15 +88,14 @@ function buildIncidentEmbed(incident: any) : MessageEmbed {
         components.push(component.name);
     }
 
-    embed.setDescription(`â€¢ Impact: ${incident.impact}\nâ€¢ Affected Components: ${components.join(", ")}`);
+    embed.setDescription(`• Impact: ${incident.impact}\n• Affected Components: ${components.join(", ")}`);
 
     // collect incident updates
-    for (let i in incident.incident_updates) {
+    for (let i in incident.incident_updates.reverse()) {
         let update = incident.incident_updates[i];
         let timeString = " (" + time(new Date(update.created_at), "R") + ")";
-        embed.addField(_.startCase(update.status) + timeString, update.body, false);
+        embed.addFields({name: _.startCase(update.status) + timeString,value: update.body, inline:false});
     }
-    embed.fields.reverse();
     return embed;
 }
 
@@ -131,11 +130,12 @@ async function updateMessage(message, incident: any) {
  * Runs the checks for updated incidents.
  */
 async function start() {
-    let obj = await fetchIncidents();
+    let obj: any = await fetchIncidents();
 
     let incidents = obj.incidents.reverse();
     for (let i in incidents) {
         let incident = incidents[i];
+        //console.log(incident)
         try {
             await checkIncident(incident);
         } catch (e) {
@@ -194,7 +194,7 @@ async function fetchIncidents() {
  * @param {String} status - The status of an incident
  * @return {ColorResolvable} color - The color corresponding to the given status
  */
-function getStatusColor(status: string) : ColorResolvable {
+function getStatusColor(status: string): ColorResolvable {
     switch (status) {
         case "resolved": return "#06a51b";
         case "monitoring": return "#a3a506";
